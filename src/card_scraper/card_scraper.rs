@@ -127,47 +127,59 @@ async fn scrape_card_props(driver: &WebDriver) -> Result<Card, Box<dyn Error>> {
 
 async fn scrape_card_values(driver: &WebDriver, card: &mut Card) -> Result<(), Box<dyn Error>> {
     let card_details = driver.find(By::Css("#cardDetail")).await?;
-    let table_rows = card_details.find_all(By::Css("tr:not(.first)")).await?;
-
-    for row in table_rows {
-        println!("row: {:?}", row.find(By::Css("th")).await?.text().await?.as_str());
-        match row.find(By::Css("th")).await?.text().await?.as_str() {
-            "カード番号" => card.card_no = parse_text(&row).await?,
-            "商品名" => card.product = parse_text(&row).await?,
-            "ネオスタンダード区分" => card.expansion = parse_text(&row).await?,
-            "作品番号" => card.expansion_id = parse_text(&row).await?,
-            "レアリティ" => card.rarity = parse_text(&row).await?,
-            "サイド" => card.side = parse_side(&row).await?,
-            "種類" => card.card_type = parse_card_type(&row).await?,
-            "色" => card.color = parse_color(&row).await?,
-            "レベル" => card.level = parse_number(&row).await?,
-            "コスト" => card.cost = parse_number(&row).await?,
-            "パワー" => card.power = parse_number(&row).await?,
-            "ソウル" => card.soul = parse_soul(&row).await?,
-            "トリガー" => card.trigger = parse_trigger(&row).await?,
-            "特徴" => card.special_attribute = parse_special_attribute(&row).await?,
-            "テキスト" => card.text = parse_text(&row).await?,
-            "フレーバー" => card.flavor_text = parse_text(&row).await?,
-            label => println!("no match label: {}", label),
-        }
+    let table_rows = card_details
+        .find_all(By::Css("tr:not(.first) th, tr:not(.first) td"))
+        .await?;
+    let table_rows_chunks = table_rows.chunks(2);
+    for chunk in table_rows_chunks {
+        match_by_pair(&chunk[0], &chunk[1], card).await?;
     }
     card.image = scrape_image(&card_details).await?;
+    scrape_card_name(card, &card_details).await?;
     Ok(())
 }
 
-async fn parse_text(row: &WebElement) -> Result<String, Box<dyn Error>> {
-    let text = row.find(By::Css("td")).await?.text().await?;
+async fn match_by_pair(
+    th: &WebElement,
+    td: &WebElement,
+    card: &mut Card,
+) -> Result<(), Box<dyn Error>> {
+    let label = th.text().await?;
+    match label.as_str() {
+        "カード番号" => card.card_no = parse_text(td).await?,
+        "商品名" => card.product = parse_text(td).await?,
+        "ネオスタンダード区分" => card.expansion = parse_text(td).await?,
+        "作品番号" => card.expansion_id = parse_text(td).await?,
+        "レアリティ" => card.rarity = parse_text(td).await?,
+        "サイド" => card.side = parse_side(td).await?,
+        "種類" => card.card_type = parse_card_type(td).await?,
+        "色" => card.color = parse_color(td).await?,
+        "レベル" => card.level = parse_number(td).await?,
+        "コスト" => card.cost = parse_number(td).await?,
+        "パワー" => card.power = parse_number(td).await?,
+        "ソウル" => card.soul = parse_soul(td).await?,
+        "トリガー" => card.trigger = parse_trigger(td).await?,
+        "特徴" => card.special_attribute = parse_special_attribute(td).await?,
+        "テキスト" => card.text = parse_text(td).await?,
+        "フレーバーテキスト" => card.flavor_text = parse_text(td).await?,
+        "イラスト" => card.illustrator = parse_text(td).await?,
+        _ => (),
+    }
+    Ok(())
+}
+
+async fn parse_text(td: &WebElement) -> Result<String, Box<dyn Error>> {
+    let text = td.text().await?;
     Ok(text)
 }
 
-async fn parse_number(row: &WebElement) -> Result<u16, Box<dyn Error>> {
-    let text = row.find(By::Css("td")).await?.text().await?;
-    println!("text: {}", text);
+async fn parse_number(td: &WebElement) -> Result<u16, Box<dyn Error>> {
+    let text = td.text().await?;
     Ok(text.parse()?)
 }
 
-async fn parse_side(row: &WebElement) -> Result<WSCardSide, Box<dyn Error>> {
-    let image = row.find(By::Css("td img")).await?;
+async fn parse_side(td: &WebElement) -> Result<WSCardSide, Box<dyn Error>> {
+    let image = td.find(By::Css("img")).await?;
     let side = match image.attr("src").await? {
         Some(str) => match str.as_str() {
             "/wordpress/wp-content/images/cardlist/_partimages/w.gif" => WSCardSide::Weiß,
@@ -179,9 +191,9 @@ async fn parse_side(row: &WebElement) -> Result<WSCardSide, Box<dyn Error>> {
     Ok(side)
 }
 
-async fn parse_card_type(row: &WebElement) -> Result<WSCardType, Box<dyn Error>> {
-    let card_type = match parse_text(row).await?.as_str() {
-        "キャラクター" => WSCardType::Character,
+async fn parse_card_type(td: &WebElement) -> Result<WSCardType, Box<dyn Error>> {
+    let card_type = match parse_text(td).await?.as_str() {
+        "キャラ" => WSCardType::Character,
         "イベント" => WSCardType::Event,
         "クライマックス" => WSCardType::Climax,
         _ => unreachable!("Unknown card type"),
@@ -189,8 +201,8 @@ async fn parse_card_type(row: &WebElement) -> Result<WSCardType, Box<dyn Error>>
     Ok(card_type)
 }
 
-async fn parse_color(row: &WebElement) -> Result<WSCardColor, Box<dyn Error>> {
-    let image = row.find(By::Css("td img")).await?;
+async fn parse_color(td: &WebElement) -> Result<WSCardColor, Box<dyn Error>> {
+    let image = td.find(By::Css("img")).await?;
     let side = match image.attr("src").await? {
         Some(str) => match str.as_str() {
             "/wordpress/wp-content/images/cardlist/_partimages/red.gif" => WSCardColor::Red,
@@ -205,19 +217,19 @@ async fn parse_color(row: &WebElement) -> Result<WSCardColor, Box<dyn Error>> {
     Ok(side)
 }
 
-async fn parse_soul(row: &WebElement) -> Result<u8, Box<dyn Error>> {
-    let souls = row.find_all(By::Css("td img")).await?;
+async fn parse_soul(td: &WebElement) -> Result<u8, Box<dyn Error>> {
+    let souls = td.find_all(By::Css("img")).await?;
     println!("souls: {:?}", souls.len());
     Ok(souls.len() as u8)
 }
 
-async fn parse_special_attribute(row: &WebElement) -> Result<Vec<String>, Box<dyn Error>> {
-    let attrs = row.find(By::Css("td")).await?.text().await?;
+async fn parse_special_attribute(td: &WebElement) -> Result<Vec<String>, Box<dyn Error>> {
+    let attrs = td.text().await?;
     Ok(attrs.split("・").map(|s| s.to_string()).collect())
 }
 
-async fn parse_trigger(row: &WebElement) -> Result<WSCardTrigger, Box<dyn Error>> {
-    let triggers = row.find_all(By::Css("td img")).await?;
+async fn parse_trigger(td: &WebElement) -> Result<WSCardTrigger, Box<dyn Error>> {
+    let triggers = td.find_all(By::Css("img")).await?;
     let trigger = match triggers
         .last()
         .unwrap()
@@ -258,4 +270,16 @@ async fn scrape_image(table: &WebElement) -> Result<String, Box<dyn Error>> {
         None => return Err("No src attribute found for image".into()),
     };
     Ok(src)
+}
+
+async fn scrape_card_name(card: &mut Card, table: &WebElement) -> Result<(), Box<dyn Error>> {
+    let names = table
+        .find(By::Css("tr.first td:last-child"))
+        .await?
+        .text()
+        .await?;
+    let spilted = names.split("\n").collect::<Vec<&str>>();
+    card.card_name = spilted[0].to_string();
+    card.card_name_kana = spilted[1].to_string();
+    Ok(())
 }
