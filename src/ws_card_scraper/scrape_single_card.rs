@@ -1,125 +1,8 @@
-use crate::utils::initialize_driver;
+use crate::ws_card_scraper::ws_card::*;
 use std::error::Error;
 use thirtyfour::{By, WebDriver, WebElement};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum WSCardType {
-    Character,
-    Event,
-    Climax,
-}
-
-impl Default for WSCardType {
-    fn default() -> Self {
-        WSCardType::Character
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum WSCardSide {
-    Weiß,
-    Schwarz,
-}
-
-impl Default for WSCardSide {
-    fn default() -> Self {
-        WSCardSide::Weiß
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum WSCardColor {
-    Red,
-    Blue,
-    Green,
-    Yellow,
-    Purple,
-    Colorless,
-}
-
-impl Default for WSCardColor {
-    fn default() -> Self {
-        WSCardColor::Colorless
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum WSCardTrigger {
-    None,
-    Soul,
-    DoubleSoul,
-    Pool,
-    Comeback,
-    Return,
-    Draw,
-    Treasure,
-    Shot,
-    Gate,
-    Choice,
-    Standby,
-}
-
-impl Default for WSCardTrigger {
-    fn default() -> Self {
-        WSCardTrigger::None
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-struct Card {
-    image: String,
-    card_name: String,
-    card_name_kana: String,
-    card_no: String,
-    product: String,
-    expansion: String,
-    expansion_id: String,
-    rarity: String,
-    side: WSCardSide,
-    card_type: WSCardType,
-    color: WSCardColor,
-    level: u16,
-    cost: u16,
-    power: u16,
-    soul: u8,
-    trigger: WSCardTrigger,
-    special_attribute: Vec<String>,
-    text: String,
-    flavor_text: String,
-    illustrator: String,
-}
-
-pub(crate) async fn scrape_ws_cards_from_title(title: &str) -> Result<(), Box<dyn Error>> {
-    let driver = initialize_driver().await?;
-    driver.goto("https://ws-tcg.com/cardlist/").await?;
-
-    click_into_title(&driver, title).await?;
-    click_into_by_css(
-        &driver,
-        "#searchResults > div > table > tbody > tr:nth-child(1) > td > h4 > a",
-    )
-    .await?;
-    let card = scrape_card_props(&driver).await?;
-    println!("Card: {:?}", card);
-    Ok(())
-}
-
-async fn click_into_title(driver: &WebDriver, title: &str) -> Result<(), Box<dyn Error>> {
-    let title_container = driver.find(By::Id("titleNumberList")).await?;
-    title_container
-        .find(By::LinkText(title))
-        .await?
-        .click()
-        .await?;
-    Ok(())
-}
-
-async fn click_into_by_css(driver: &WebDriver, css: &str) -> Result<(), Box<dyn Error>> {
-    driver.find(By::Css(css)).await?.click().await?;
-    Ok(())
-}
-
-async fn scrape_card_props(driver: &WebDriver) -> Result<Card, Box<dyn Error>> {
+pub(crate) async fn scrape_card_props(driver: &WebDriver) -> Result<Card, Box<dyn Error>> {
     let mut card = Card::default();
     scrape_card_values(driver, &mut card).await?;
     Ok(card)
@@ -161,7 +44,7 @@ async fn match_by_pair(
         "トリガー" => card.trigger = parse_trigger(td).await?,
         "特徴" => card.special_attribute = parse_special_attribute(td).await?,
         "テキスト" => card.text = parse_text(td).await?,
-        "フレーバーテキスト" => card.flavor_text = parse_text(td).await?,
+        "フレーバー" => card.flavor_text = parse_text(td).await?,
         "イラスト" => card.illustrator = parse_text(td).await?,
         _ => (),
     }
@@ -170,12 +53,16 @@ async fn match_by_pair(
 
 async fn parse_text(td: &WebElement) -> Result<String, Box<dyn Error>> {
     let text = td.text().await?;
-    Ok(text)
+    Ok(trim_and_replace(&text))
 }
 
 async fn parse_number(td: &WebElement) -> Result<u16, Box<dyn Error>> {
-    let text = td.text().await?;
-    Ok(text.parse()?)
+    let td_text = td.text().await?.trim().to_string();
+    if td_text.chars().all(|c| c.is_digit(10)) {
+        Ok(td_text.parse()?)
+    } else {
+        Ok(0)
+    }
 }
 
 async fn parse_side(td: &WebElement) -> Result<WSCardSide, Box<dyn Error>> {
@@ -219,7 +106,6 @@ async fn parse_color(td: &WebElement) -> Result<WSCardColor, Box<dyn Error>> {
 
 async fn parse_soul(td: &WebElement) -> Result<u8, Box<dyn Error>> {
     let souls = td.find_all(By::Css("img")).await?;
-    println!("souls: {:?}", souls.len());
     Ok(souls.len() as u8)
 }
 
@@ -230,6 +116,9 @@ async fn parse_special_attribute(td: &WebElement) -> Result<Vec<String>, Box<dyn
 
 async fn parse_trigger(td: &WebElement) -> Result<WSCardTrigger, Box<dyn Error>> {
     let triggers = td.find_all(By::Css("img")).await?;
+    if triggers.is_empty() {
+        return Ok(WSCardTrigger::None);
+    };
     let trigger = match triggers
         .last()
         .unwrap()
@@ -279,7 +168,11 @@ async fn scrape_card_name(card: &mut Card, table: &WebElement) -> Result<(), Box
         .text()
         .await?;
     let spilted = names.split("\n").collect::<Vec<&str>>();
-    card.card_name = spilted[0].to_string();
-    card.card_name_kana = spilted[1].to_string();
+    card.card_name = trim_and_replace(spilted[0]);
+    card.card_name_kana = trim_and_replace(spilted[1]);
     Ok(())
+}
+
+fn trim_and_replace(text: &str) -> String {
+    text.trim().replace("\u{3000}", " ")
 }
