@@ -9,7 +9,9 @@ pub(crate) async fn scrape_card_props(driver: &WebDriver) -> Result<WSCard, Box<
 }
 
 async fn scrape_card_values(driver: &WebDriver, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
-    let card_details = driver.find(By::Css("#cardDetail .card-detail-table")).await?;
+    let card_details = driver
+        .find(By::Css("#cardDetail .card-detail-table"))
+        .await?;
     let table_rows = card_details
         .find_all(By::Css("tr:not(.first) th, tr:not(.first) td"))
         .await?;
@@ -113,9 +115,13 @@ async fn parse_soul(td: &WebElement) -> Result<u8, Box<dyn Error>> {
     Ok(souls.len() as u8)
 }
 
-async fn parse_special_attribute(td: &WebElement) -> Result<Vec<String>, Box<dyn Error>> {
+async fn parse_special_attribute(td: &WebElement) -> Result<String, Box<dyn Error>> {
     let attrs = td.text().await?;
-    Ok(attrs.split("・").map(|s| s.to_string()).collect())
+    let attr_vec = attrs
+        .split("・")
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
+    Ok(attr_vec.join("|"))
 }
 
 async fn parse_trigger(td: &WebElement) -> Result<WSCardTrigger, Box<dyn Error>> {

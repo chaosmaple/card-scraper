@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Eq, PartialEq)]
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
 pub(crate) enum WSCardType {
     Character,
     Event,
@@ -11,7 +13,7 @@ impl Default for WSCardType {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize)]
 pub(crate) enum WSCardSide {
     Weiß,
     Schwarz,
@@ -23,7 +25,7 @@ impl Default for WSCardSide {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize)]
 pub(crate) enum WSCardColor {
     Red,
     Blue,
@@ -39,7 +41,7 @@ impl Default for WSCardColor {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize)]
 pub(crate) enum WSCardTrigger {
     None,
     Soul,
@@ -61,7 +63,7 @@ impl Default for WSCardTrigger {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Serialize)]
 pub(crate) struct WSCard {
     pub image: String,
     pub card_name: String,
@@ -79,8 +81,35 @@ pub(crate) struct WSCard {
     pub power: u16,
     pub soul: u8,
     pub trigger: WSCardTrigger,
-    pub special_attribute: Vec<String>,
+    pub special_attribute: String,
     pub text: String,
     pub flavor_text: String,
     pub illustrator: String,
+}
+
+impl Default for WSCard {
+    fn default() -> Self {
+        WSCard {
+            image: String::new(),
+            card_name: String::new(),
+            card_name_kana: String::new(),
+            card_no: String::new(),
+            product: String::new(),
+            expansion: String::new(),
+            expansion_id: String::new(),
+            rarity: String::new(),
+            side: WSCardSide::Weiß,
+            card_type: WSCardType::Character,
+            color: WSCardColor::Red,
+            level: 0,
+            cost: 0,
+            power: 0,
+            soul: 0,
+            trigger: WSCardTrigger::None,
+            special_attribute: String::new(),
+            text: String::new(),
+            flavor_text: String::from("-"),
+            illustrator: String::from("-"),
+        }
+    }
 }
