@@ -2,13 +2,13 @@ use crate::ws_card_scraper::ws_card::*;
 use std::error::Error;
 use thirtyfour::{By, WebDriver, WebElement};
 
-pub(crate) async fn scrape_card_props(driver: &WebDriver) -> Result<Card, Box<dyn Error>> {
-    let mut card = Card::default();
+pub(crate) async fn scrape_card_props(driver: &WebDriver) -> Result<WSCard, Box<dyn Error>> {
+    let mut card = WSCard::default();
     scrape_card_values(driver, &mut card).await?;
     Ok(card)
 }
 
-async fn scrape_card_values(driver: &WebDriver, card: &mut Card) -> Result<(), Box<dyn Error>> {
+async fn scrape_card_values(driver: &WebDriver, card: &mut WSCard) -> Result<(), Box<dyn Error>> {
     let card_details = driver.find(By::Css("#cardDetail .card-detail-table")).await?;
     let table_rows = card_details
         .find_all(By::Css("tr:not(.first) th, tr:not(.first) td"))
@@ -28,7 +28,7 @@ async fn scrape_card_values(driver: &WebDriver, card: &mut Card) -> Result<(), B
 async fn match_by_pair(
     th: &WebElement,
     td: &WebElement,
-    card: &mut Card,
+    card: &mut WSCard,
 ) -> Result<(), Box<dyn Error>> {
     let label = th.text().await?;
     match label.as_str() {
@@ -165,7 +165,7 @@ async fn scrape_image(table: &WebElement) -> Result<String, Box<dyn Error>> {
     Ok(src)
 }
 
-async fn scrape_card_name(card: &mut Card, table: &WebElement) -> Result<(), Box<dyn Error>> {
+async fn scrape_card_name(card: &mut WSCard, table: &WebElement) -> Result<(), Box<dyn Error>> {
     let names = table
         .find(By::Css("tr.first td:last-child"))
         .await?
